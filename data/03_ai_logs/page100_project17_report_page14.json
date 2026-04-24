@@ -1,0 +1,22 @@
+[
+  {
+    "Hole_No": "BH-01",
+    "Coordinates": "X: 231451.12, Y: 432123.55",
+    "Groundwater": "GL -1.5m",
+    "Depth_From": 39.0,
+    "Depth_To": 40.5,
+    "Thickness": 1.5,
+    "Soil_Type": "매립층",
+    "N_Value": "10/30"
+  },
+  {
+    "Hole_No": "BH-01",
+    "Coordinates": "X: 231451.12, Y: 432123.55",
+    "Groundwater": "GL -1.5m",
+    "Depth_From": 40.5,
+    "Depth_To": 42.0,
+    "Thickness": 1.5,
+    "Soil_Type": "풍화토",
+    "N_Value": "50/15"
+  }
+]
