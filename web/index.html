@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoBIM Borehole Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+    
+    <div class="dashboard-container glass-panel">
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🌍 GeoBIM CSV UI</h2>
+            </div>
+            
+            <div class="upload-section">
+                <!-- 원본 PDF 파일 업로드 트리거 버튼 -->
+                <label for="pdfFileInput" class="btn-primary" style="background: rgba(147, 51, 234, 0.2); border-color: #9333ea;">
+                    📄 Upload PDF & Convert
+                </label>
+                <input type="file" id="pdfFileInput" accept=".pdf" multiple hidden>
+                <p class="sub-text" id="uploadStatus">분석을 원하는 시추주상도 PDF 원본을 직접 업로드해 보세요!</p>
+            </div>
+
+            <nav class="file-list" id="fileList">
+                <!-- Javascript가 파싱된 시추공(BH-01, NH-1 등) 목록을 동적으로 렌더링 -->
+            </nav>
+        </aside>
+
+        <main class="content-area">
+            <header class="content-header" style="display: flex; justify-content: space-between; align-items: flex-start; position: relative;">
+                <div>
+                    <h1 id="boreholeTitle">선택된 시추공이 없습니다</h1>
+                    <div class="meta-info" id="metaInfo">
+                        <!-- 상속된 좌표/수위 등 메타 데이터 표시 공간 -->
+                    </div>
+                </div>
+                <!-- 엑셀 추출 버튼들 -->
+                <div class="download-group" style="display: flex; gap: 10px;">
+                    <button id="downloadCombinedCsvBtn" class="btn-primary" style="width: auto; padding: 10px 20px; display: none; background: #059669; border-color: #059669;">📊 전체 통합 CSV</button>
+                    <button id="downloadZipBtn" class="btn-primary" style="width: auto; padding: 10px 20px; display: none; background: #4b5563; border-color: #4b5563;">📦 전체 결과 ZIP</button>
+                    <button id="downloadCsvBtn" class="btn-primary" style="width: auto; padding: 10px 20px; display: none;">⬇️ 개별 CSV</button>
+                    <button id="downloadJsonBtn" class="btn-primary" style="width: auto; padding: 10px 20px; display: none; background: #eab308; border-color: #eab308; color: #fff;">📄 JSON 다운로드</button>
+                </div>
+            </header>
+            
+            <!-- 서버 변환 대기 로딩 오버레이 -->
+            <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+                <div class="spinner"></div>
+                <p style="text-shadow: 0 0 10px #000;">AI Vision 모델이 PDF를 분석하며 기둥을 세우고 있습니다... <br><br><span style="color:#fbbf24;">잠시만 기다려 주세요!</span></p>
+            </div>
+
+            <section class="visualization-stage">
+                <!-- 시각화된 주상도 기둥 -->
+                <div class="strata-visualizer" id="strataVisualizer">
+                    <p class="placeholder-text">CSV 파일을 선택하면 이곳에 시추주상도의 아름다운 지층 맵핑이 렌더링됩니다.</p>
+                </div>
+                
+                <!-- 원본 원시 데이터 테이블 -->
+                <div class="table-container">
+                    <table id="dataTable" class="glass-table">
+                        <thead>
+                            <tr>
+                                <th>지층명</th>
+                                <th>상심도 (m)</th>
+                                <th>하심도 (m)</th>
+                                <th>두께 (m)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
