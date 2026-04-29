@@ -151,7 +151,7 @@ def parse_coordinates(coord_text):
 # 3. 단일 PDF 인덱스 기반 추출 함수 (Core Extraction)
 # =============================================================================
 
-def process_single_pdf_indexed(pdf_path):
+def process_single_pdf_indexed(pdf_path, project_name=None):
     """
     단일 PDF 파일에서 인덱스 기반으로 시추 데이터를 추출합니다.
     
@@ -159,7 +159,8 @@ def process_single_pdf_indexed(pdf_path):
         List[Dict]: [{"프로젝트명", "경도", "위도", "표고", "시추공명", "상심도", "하심도", "지층명"}, ...]
     """
     filename = os.path.basename(pdf_path)
-    project_name = extract_project_info(filename)
+    if not project_name:
+        project_name = os.path.splitext(filename)[0]
     
     doc = None
     try:

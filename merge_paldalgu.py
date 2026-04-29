@@ -9,7 +9,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 def run_integration():
     target_dir = r"C:\antigravity\#1_1_PDF_Download\PDF_Storage\경기도 수원시\수원시팔달구"
-    output_filename = "수원시팔달구_통합_데이터.csv"
+    output_filename = "수원시팔달구_통합_데이터_v2.csv"
     output_path = os.path.join(target_dir, output_filename)
     
     column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고', '시추공명', '상심도', '하심도', '지층명']
@@ -57,6 +57,9 @@ def run_integration():
         
         # 자연 정렬 적용
         from parsers.pdf_parser_odl import natural_sort_key
+        # 정렬 기준 컬럼을 문자열로 강제 변환하여 unhashable type: 'list' 오류 방지
+        df['프로젝트명'] = df['프로젝트명'].astype(str)
+        df['시추공명'] = df['시추공명'].astype(str)
         df = df.sort_values(by=['프로젝트명', '시추공명'], key=lambda x: x.map(natural_sort_key))
         
         df.to_csv(output_path, index=False, encoding='utf-8-sig')

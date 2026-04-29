@@ -22,12 +22,13 @@ def extract_project_info(filename: str) -> str:
     proj_num = proj_match.group(1) if proj_match else "?"
     return f"PJ_{page_num}-{proj_num}"
 
-def process_single_hwpx_indexed(hwpx_path: str):
+def process_single_hwpx_indexed(hwpx_path: str, project_name=None):
     """
     HWPX 파일 내부의 [표 인덱스][행][열] 좌표를 통해 정밀 데이터를 추출합니다.
     """
     filename = os.path.basename(hwpx_path)
-    project_name = extract_project_info(filename)
+    if not project_name:
+        project_name = os.path.splitext(filename)[0]
     
     hwp = None
     try:

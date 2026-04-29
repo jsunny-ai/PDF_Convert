@@ -5,8 +5,8 @@ import gc
 import unicodedata
 
 def natural_sort_key(s):
-    """문자열 내의 숫자를 수치로 인식하여 정렬하기 위한 키를 생성합니다."""
-    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s))]
+    """문자열 내의 숫자를 수치로 인식하여 정렬하기 위한 키를 생성합니다. (Hashable한 튜플 반환)"""
+    return tuple(int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s)))
 
 def normalize_strata_name(text: str) -> str:
     """추출된 지반명 텍스트에서 색상 정보 등을 제거하여 정규화합니다."""
@@ -358,38 +358,36 @@ def extract_all_from_md(md_path: str, project_name: str = "", pdf_path: str = No
             line = lines[i]
             if not line: continue
             
-            # 페이지 전환 감지 (MD 내 테이블 헤더 반복 활용)
-            # ODL MD는 페이지마다 헤더를 반복 출력하므로 이를 페이지 구분자로 활용
+            # [수정] 페이지 전환 감지(L363-371) 대신 심도 리셋 및 ID 목록 기반 순차 전환으로 통합
             if "|심 도 (-m)|표 고 (m)|" in line.replace(" ", ""):
+                # 헤더 라인은 데이터 파싱 제외하되, 페이지 번호만 추적 (로깅용)
                 current_page_idx += 1
-                if current_page_idx in page_metadata:
-                    new_id = page_metadata[current_page_idx]["id"]
-                    if current_bh_id != new_id:
-                        current_bh_id = new_id
-                        section_idx += 1
-                        last_processed_depth = -1.0
-                continue # 헤더 라인은 데이터 파싱 제외
+                continue 
             
-            # 수동 ID 전환 (MD 텍스트 보조) - page_metadata가 없을 때만 폴백
-            if not page_metadata:
-                id_match = re.search(r'(?:시추번호|시추공번|시추공명|No\.?)[^A-Za-z0-9가-힣/]*([A-Za-z0-9-]{2,15})', line, re.I)
-                if id_match:
-                    val = id_match.group(1).upper()
-                    for pid in pdf_bh_ids:
-                        if val in pid.replace("-","").upper() or pid.upper() in val:
-                            if current_bh_id != pid:
-                                current_bh_id = pid
-                                section_idx += 1
-                                last_processed_depth = -1.0
-                            break
+            # 수동 ID 전환 (MD 텍스트 보조)
+            id_match = re.search(r'(?:시추번호|시추공번|시추공명|No\.?)[^A-Za-z0-9가-힣/]*([A-Za-z0-9-]{2,15})', line, re.I)
+            if id_match:
+                val = id_match.group(1).upper()
+                for pid in pdf_bh_ids:
+                    if val in pid.replace("-","").upper() or pid.upper() in val:
+                        if current_bh_id != pid:
+                            current_bh_id = pid
+                            section_idx += 1
+                            last_processed_depth = -1.0
+                            if current_bh_id not in bh_metadata:
+                                bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
+                        break
+
             row_match = re.match(r'^\|\s*([^\|]+)\|\s*([^\|]+)\|\s*([^\|]+)\|', line)
             if row_match:
                 try:
                     temp_depth = clean_float(row_match.group(1).strip())
                     if temp_depth is None: continue
                     
-                    # 수치 기반 자동 시추공 전환 (심도 리셋)
+                    # 수치 기반 자동 시추공 전환 (심도 리셋 감지)
+                    # 현재 심도가 이전 심도보다 현저히 낮아지면(예: 30m -> 0m) 새로운 시추공으로 간주
                     is_reset = current_bh_id and len(results) > 0 and temp_depth < results[-1]['심도'] - 2.0
+                    
                     if (not current_bh_id or is_reset) and pdf_bh_ids:
                         if not current_bh_id:
                             current_bh_id = pdf_bh_ids[0]
@@ -399,16 +397,18 @@ def extract_all_from_md(md_path: str, project_name: str = "", pdf_path: str = No
                                 if curr_idx + 1 < len(pdf_bh_ids): 
                                     current_bh_id = pdf_bh_ids[curr_idx + 1]
                                     section_idx += 1
-                                    # ID 자동 전환 시에도 주변 텍스트에서 메타데이터 보강 시도
-                                    ctx_start = max(0, i - 15)
+                                    last_processed_depth = -1.0
+                                    # ID 전환 시 주변 텍스트에서 메타데이터 보강 시도
+                                    ctx_start = max(0, i - 20)
                                     ctx_text = "\n".join(lines[ctx_start:i+1])
+                                    if current_bh_id not in bh_metadata:
+                                        bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
                                     for kw, key in [("X(N)", "위도"), ("Y(E)", "경도"), ("표고", "표고"), ("EL", "표고")]:
-                                        if current_bh_id not in bh_metadata: bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
                                         if bh_metadata[current_bh_id][key] == "N/A":
                                             val = find_value_in_cells([ctx_text], [kw])
                                             if val is not None: bh_metadata[current_bh_id][key] = val
                             except ValueError: pass
-                        last_processed_depth = -1.0
+                        
                         if current_bh_id not in bh_metadata:
                             bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
 

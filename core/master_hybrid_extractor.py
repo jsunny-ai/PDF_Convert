@@ -55,34 +55,64 @@ class MasterHybridExtractor:
                 row["프로젝트명"] = project_name
                 
         if not raw_data and pdf_path:
-            logger.warning(f"   ㄴ [Tier 1 Fallback] HWPX 인식안됨/순수 PDF. ODL 마크다운 추출기 가동")
-            md_dir = os.path.join(self.output_dir, "data", "02_markdown", "Fallback_Ext")
-            os.makedirs(md_dir, exist_ok=True)
-            try:
-                import glob
-                # 안정성을 위해 3초 대기 후 변환 시도 (WinError 5 방지)
-                time.sleep(1)
-                opendataloader_pdf.convert(input_path=[pdf_path], output_dir=md_dir, format="markdown", quiet=True)
-                base = os.path.splitext(os.path.basename(pdf_path))[0]
-                md_files = [f for f in os.listdir(md_dir) if f.endswith('.md') and base in f]
+            logger.info(f"   ㄴ [Tier 1.5] PDF 표 인덱스 기반 추출 시도")
+            from parsers.hwp_indexed_extractor import process_single_pdf_indexed
+            raw_data = process_single_pdf_indexed(pdf_path, project_name=project_name)
+            
+            if raw_data:
+                logger.info(f"      * PDF 인덱스 추출 성공: {len(raw_data)} 행")
+                # [Global Sync] 확정된 project_name을 전 행에 브로드캐스팅하여 PJ_ 오염 차단
+                for row in raw_data:
+                    row["프로젝트명"] = project_name
+                # 메타데이터 업데이트 (첫 번째 행 기준)
+                if raw_data[0].get("경도") != "N/A": meta["경도"] = raw_data[0]["경도"]
+                if raw_data[0].get("위도") != "N/A": meta["위도"] = raw_data[0]["위도"]
+                if raw_data[0].get("표고") != "N/A": meta["표고"] = raw_data[0]["표고"]
+            else:
+                logger.warning(f"   ㄴ [Tier 1.9 Fallback] HWPX/PDF 표 인식안됨. ODL 마크다운 추출기 가동")
+                md_dir = os.path.join(self.output_dir, "data", "02_markdown", "Fallback_Ext")
+                main_md_dir = os.path.join(self.output_dir, "data", "02_markdown")
+                os.makedirs(md_dir, exist_ok=True)
                 
-                if md_files:
-                    md_path = os.path.join(md_dir, md_files[0])
-                    pages_data = ppo.extract_all_from_md(md_path, project_name=project_name, pdf_path=pdf_path)
+                try:
+                    base = os.path.splitext(os.path.basename(pdf_path))[0]
+                    # [Optimization] 메인 디렉토리나 폴백 디렉토리에 이미 MD가 있는지 확인
+                    existing_md = None
+                    target_md_path = os.path.join(md_dir, f"{base}.md")
+                    main_md_path = os.path.join(main_md_dir, f"{base}.md")
                     
-                    # flat 병합 (Tier 1 결과 형식에 맞춤)
-                    for page in pages_data:
-                        raw_data.extend(page.get("data", []))
+                    if os.path.exists(main_md_path): existing_md = main_md_path
+                    elif os.path.exists(target_md_path): existing_md = target_md_path
                     
-                    # 빈값이 채워진 meta 정보 가져오기 (ODL이 찾았을 수도 있음)
-                    if pages_data and pages_data[0].get("data"):
-                        first = pages_data[0]["data"][0]
-                        if first.get("경도"): meta["경도"] = first["경도"]
-                        if first.get("위도"): meta["위도"] = first["위도"]
-                        if first.get("표고"): meta["표고"] = first["표고"]
-            except Exception as e:
-                import traceback
-                logger.error(f"   ❌ [Tier 1 Fallback] ODL 전환 실패: {traceback.format_exc()}")
+                    if not existing_md:
+                        logger.info(f"      * 마크다운 파일 부재. ODL 신규 변환 시작...")
+                        time.sleep(1)
+                        opendataloader_pdf.convert(input_path=[pdf_path], output_dir=md_dir, format="markdown", quiet=True)
+                        md_files = [f for f in os.listdir(md_dir) if f.endswith('.md') and base in f]
+                        if md_files:
+                            md_path = os.path.join(md_dir, md_files[0])
+                        else:
+                            md_path = None
+                    else:
+                        md_path = existing_md
+                        logger.info(f"      * 기생성된 마크다운 재사용(Tier 1 Fallback): {os.path.basename(md_path)}")
+                    
+                    if md_path:
+                        pages_data = ppo.extract_all_from_md(md_path, project_name=project_name, pdf_path=pdf_path)
+                        
+                        # flat 병합 (Tier 1 결과 형식에 맞춤)
+                        for page in pages_data:
+                            raw_data.extend(page.get("data", []))
+                        
+                        # 빈값이 채워진 meta 정보 가져오기 (ODL이 찾았을 수도 있음)
+                        if pages_data and pages_data[0].get("data"):
+                            first = pages_data[0]["data"][0]
+                            if first.get("경도"): meta["경도"] = first["경도"]
+                            if first.get("위도"): meta["위도"] = first["위도"]
+                            if first.get("표고"): meta["표고"] = first["표고"]
+                except Exception as e:
+                    import traceback
+                    logger.error(f"   ❌ [Tier 1 Fallback] ODL 전환 실패: {traceback.format_exc()}")
         
         # -----------------------------
         # Tier 2: PyMuPDF Spatial Recovery (Fallback)
@@ -121,12 +151,15 @@ class MasterHybridExtractor:
         
         verified_data = []
         for row in raw_data:
-            # 필수 필드 결측 여부 확인 (경도/위도/표고/상심도/하심도/지층명)
-            critical_fields = ["경도", "위도", "표고", "상심도", "하심도", "지층명"]
-            if any(str(row.get(f, "N/A")) == "N/A" for f in critical_fields):
-                logger.error(f"   [유실 차단] {project_name} - 필수 정보(좌표/심도) 결측 발견. 행 제외 처리.")
+            # 필수 필드 결측 여부 확인 (상심도/하심도/지층명은 필수, 좌표는 선택)
+            mandatory_fields = ["상심도", "하심도", "지층명"]
+            if any(str(row.get(f, "N/A")) == "N/A" for f in mandatory_fields):
+                # 시추공명이 있는 경우에만 경고 출력
+                if row.get("시추공명") != "UNKNOWN":
+                    logger.error(f"   [유실 차단] {project_name} - {row.get('시추공명')} 필수 정보(심도/지층) 결측 발견. 행 제외 처리.")
                 continue
                 
+            # 좌표 정규화 (결측 시 빈 값 반환)
             lon, lat, tmx, tmy = normalize_coordinates(
                 row.get("경도"), 
                 row.get("위도"), 
@@ -144,6 +177,9 @@ class MasterHybridExtractor:
             return []
             
         logger.info(f"   ㄴ [Merge] 공통 후처리(심도 보정 및 병합) 적용")
+        # [Final SSOT Enforcement] 최종 확정 project_name을 전역 브로드캐스팅하여 최종 정합성 보장
+        for row in verified_data:
+            row["프로젝트명"] = project_name
         merged_data = merge_multi_page_tables([{"data": verified_data}])
         
         return merged_data
@@ -312,16 +348,30 @@ class MasterHybridExtractor:
         os.makedirs(md_output_dir, exist_ok=True)
         
         try:
-            # 1. ODL MD 변환 (WinError 5 방지를 위한 지연/재시도)
-            time.sleep(0.5)
-            opendataloader_pdf.convert(
-                input_path=[pdf_path], 
-                output_dir=md_output_dir,
-                format="markdown"
-            )
-            
             base = os.path.splitext(os.path.basename(pdf_path))[0]
             md_path = os.path.join(md_output_dir, f"{base}.md")
+            
+            # [Optimization] 이미 마크다운 파일이 존재하면 재변환 생략 (속도 개선)
+            # 메인 디렉토리나 폴백 디렉토리도 함께 체크
+            fallback_md_path = os.path.join(self.output_dir, "data", "02_markdown", "Fallback_Ext", f"{base}.md")
+            main_md_path = os.path.join(self.output_dir, "data", "02_markdown", f"{base}.md")
+            
+            existing_md = None
+            if os.path.exists(md_path): existing_md = md_path
+            elif os.path.exists(fallback_md_path): existing_md = fallback_md_path
+            elif os.path.exists(main_md_path): existing_md = main_md_path
+            
+            if not existing_md:
+                # 1. ODL MD 변환 (WinError 5 방지를 위한 지연/재시도)
+                time.sleep(0.5)
+                opendataloader_pdf.convert(
+                    input_path=[pdf_path], 
+                    output_dir=md_output_dir,
+                    format="markdown"
+                )
+            else:
+                md_path = existing_md
+                logger.info(f"      * 기생성된 마크다운 재사용: {os.path.basename(md_path)}")
             
             if not os.path.exists(md_path):
                 # ODL 변환 실패시 검증 Pass(무조건 실패로 띄우진 않음. False-positive 방지)

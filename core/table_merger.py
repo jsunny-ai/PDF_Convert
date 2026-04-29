@@ -23,10 +23,11 @@ STRATA_GROUP_MAP = {
 }
 
 def apply_strata_group_mapping(rows: list) -> list:
-    """11종 세분류 지층명을 4대 대분류로 강제 치환한다."""
+    """11종 세분류 지층명을 4대 대분류로 강제 치환한다. 정의되지 않은 경우 원본 유지."""
     for row in rows:
         original = row.get("지층명", "토사")
-        row["지층명"] = STRATA_GROUP_MAP.get(original, "토사")
+        # 기본값을 original로 설정하여 매핑 테이블에 없는 경우 유실 방지
+        row["지층명"] = STRATA_GROUP_MAP.get(original, original)
     return rows
 
 def merge_multi_page_tables(pages_data) -> list:
@@ -151,12 +152,18 @@ def apply_depth_continuity_correction(rows: list) -> list:
             
             # 중첩(Overlap) 발생 시 보정
             if prev_bottom > nxt_top:
+                # 심도 역행이 너무 심하면(2.0m 이상) 다른 섹션으로 간주하거나 데이터 오류로 보고 유지는 함
+                if prev_bottom > nxt_top + 2.0:
+                    logging.warning(f"  ⚠️ [심도 역행] {bh}: {prev_bottom} -> {nxt_top}. 강제 연속성 부여.")
                 nxt["상심도"] = prev_bottom
             
             # 유효한 두께를 가진 행만 유지 (A종료 = B시작 보장)
-            if float(nxt.get("하심도", 0.0)) > float(nxt.get("상심도", 0.0)):
-                bh_corrected.append(nxt)
-                current = nxt
+            # 하심도가 상심도보다 작아지면 하심도를 상심도 + 0.1m로 강제 조정하여 데이터 유실 방지
+            if float(nxt.get("하심도", 0.0)) <= float(nxt.get("상심도", 0.0)):
+                nxt["하심도"] = float(nxt.get("상심도", 0.0)) + 0.1
+                
+            bh_corrected.append(nxt)
+            current = nxt
         
         all_corrected.extend(bh_corrected)
         
@@ -168,10 +175,14 @@ def merge_consecutive_identical_soil_types(rows: list) -> list:
     """
     if not rows: return []
     
-    # 자연 정렬 적용하여 시추공별, 상심도순 정합성 확보
+    # 자연 정렬 적용하여 프로젝트별, 시추공별, 상심도순 정합성 확보
     import parsers.pdf_parser_odl as ppo
     natural_sort_key = ppo.natural_sort_key
-    sorted_rows = sorted(rows, key=lambda x: (natural_sort_key(x.get("시추공명", "")), float(x.get("상심도", 0.0))))
+    sorted_rows = sorted(rows, key=lambda x: (
+        natural_sort_key(x.get("프로젝트명", "")),
+        natural_sort_key(x.get("시추공명", "")), 
+        float(x.get("상심도", 0.0))
+    ))
     
     merged = []
     if not sorted_rows: return []
@@ -191,7 +202,9 @@ def merge_consecutive_identical_soil_types(rows: list) -> list:
         import re
         def clean_id(s): return re.sub(r'[^A-Z0-9]', '', str(s).upper())
         
-        if clean_id(current_row.get("시추공명")) == clean_id(row.get("시추공명")) and curr_soil == last_soil:
+        if (current_row.get("프로젝트명") == row.get("프로젝트명") and 
+            clean_id(current_row.get("시추공명")) == clean_id(row.get("시추공명")) and 
+            curr_soil == last_soil):
             
             # 하심도 업데이트 (연속된 구간 확장)
             current_row["하심도"] = max(float(current_row.get("하심도", 0.0)), float(row.get("하심도", 0.0)))
