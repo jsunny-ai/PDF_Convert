@@ -56,8 +56,8 @@ def process_district(district_name, input_dir):
     if all_rows:
         df = pd.DataFrame(all_rows)
         
-        # 컬럼 순서 정리
-        column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고', '시추공명', '상심도', '하심도', '지층명', 'tm_x', 'tm_y']
+        # 컬럼 순서 정리 (원본 TM 좌표 '경도', '위도' 보존)
+        column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '경도', '위도', '표고', '시추공명', '상심도', '하심도', '지층명', 'tm_x', 'tm_y', 'meta_crs']
         existing_cols = [c for c in column_order if c in df.columns]
         df = df[existing_cols]
         
@@ -107,7 +107,8 @@ def main():
     root_dir = r"C:\antigravity\#1_1_PDF_Download\PDF_Storage\경기도 수원시"
     districts = [
         {"name": "수원시권선구", "path": os.path.join(root_dir, "수원시권선구")},
-        {"name": "수원시장안구", "path": os.path.join(root_dir, "수원시장안구")}
+        {"name": "수원시장안구", "path": os.path.join(root_dir, "수원시장안구")},
+        {"name": "수원시팔달구", "path": os.path.join(root_dir, "수원시팔달구")}
     ]
     
     results = []

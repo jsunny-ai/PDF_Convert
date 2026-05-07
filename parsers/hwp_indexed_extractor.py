@@ -102,6 +102,85 @@ def extract_project_info(filename):
 
 
 # =============================================================================
+# 1-1. 좌표계 메타데이터 추출 (CRS Detection)
+# =============================================================================
+
+def extract_crs_from_page(page_text=None, page=None):
+    """도면 우측 상단의 좌표계 텍스트 정보를 최우선으로 분석하여 
+    EPSG 코드 또는 PROJ 문자열을 반환합니다.
+    """
+    header = ""
+    if page is not None:
+        try:
+            # 우측 상단 블록만 필터링 (가로 기준 우측 절반, 세로 기준 상단 1/3)
+            rect = page.rect
+            w_mid = rect.width / 2.0
+            h_third = rect.height / 3.0
+            blocks = page.get_text("blocks")
+            tr_texts = []
+            for b in blocks:
+                x0, y0, x1, y1, text, _, _ = b
+                if x0 > w_mid * 0.8 and y1 < h_third * 1.5:  # 약간의 여유 마진
+                    tr_texts.append(text)
+            header = " ".join(tr_texts)
+        except Exception as e:
+            logger.warning(f"블록 추출 실패, 일반 텍스트 모드로 폴백: {e}")
+            header = page_text[:1000] if page_text else ""
+    else:
+        header = page_text[:1000] if page_text else ""
+
+    if header:
+        logger.info(f"   [CRS Debug] Extracted Header: {header[:200]}...")
+
+    if not header:
+        return None
+
+    # 패턴 매칭
+    # 타원체: GRS80, Bessel, WGS84
+    ellipsoid = "GRS80" # 기본값
+    if re.search(r'Bessel', header, re.IGNORECASE):
+        ellipsoid = "BESSEL"
+    elif re.search(r'WGS\s*84|경위도', header, re.IGNORECASE):
+        return "WGS84"
+    elif re.search(r'GRS\s*80', header, re.IGNORECASE):
+        ellipsoid = "GRS80"
+    else:
+        # 타원체 명시가 없을 경우 기본적으로 None 반환 (정밀 파싱 원칙)
+        # 하지만 수원시 데이터 특성상 좌표계라는 단어가 있으면 GRS80 계열로 간주
+        if not re.search(r'좌표계|투영|원점', header):
+            return None
+
+    # 원점: 중부, 동부, 서부
+    origin = "중부"
+    if "동부" in header: origin = "동부"
+    elif "서부" in header: origin = "서부"
+
+    # 가산북치: 50만, 60만
+    has_500k = re.search(r'50만|500,000|500000', header)
+    has_600k = re.search(r'60만|600,000|600000', header)
+
+    # 파라미터 조합에 따른 표준 EPSG 반환
+    if ellipsoid == "GRS80":
+        if origin == "동부":
+            if has_500k: return "EPSG:5183"
+            if has_600k: return "EPSG:5187"
+            return None  # 가산값 불명 -> 후행 판정
+        if origin == "서부": return "EPSG:5185"
+        # 중부 기본
+        if has_500k: return "EPSG:5181"
+        if has_600k: return "EPSG:5186"
+        return None  # 가산값 불명 -> 후행 판정
+        
+    if ellipsoid == "BESSEL":
+        if origin == "동부": return "EPSG:5176"
+        if origin == "서부": return "EPSG:5175"
+        return "EPSG:5174" # 중부 기본
+
+    return None
+
+
+
+# =============================================================================
 # 2. 좌표 파싱 (Index-Based Mapping)
 # =============================================================================
 
@@ -139,10 +218,10 @@ def parse_coordinates(coord_text):
             if lat is None:
                 lat = vals[1] if len(vals) > 1 else None
     
-    # [NEW] 수원시 로컬 좌표계 1차 수치 검증
-    if lon is not None and lat is not None:
-        if not validate_suwon_coordinates(lon, lat):
-            logger.warning(f"  ⚠️ [Validation Warning] 좌표 범위 이탈: X={lon}, Y={lat}")
+    # [DISABLED] 추출기 단계의 개별 검증은 Axis Swap 로직을 방해하므로 비활성화
+    # if lon is not None and lat is not None:
+    #     if not validate_suwon_coordinates(lon, lat):
+    #         logger.warning(f"  ⚠️ [Validation Warning] 좌표 범위 이탈: X={lon}, Y={lat}")
 
     return lon, lat
 

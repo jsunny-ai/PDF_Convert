@@ -3,18 +3,28 @@ import os
 import json
 import re
 from parsers.pdf_parser_odl import natural_sort_key
+from core.spatial_validator import SpatialValidator
+import shutil
 
 def integrate():
     print("=== 수원시 전역 데이터 통합 및 #2 프로젝트 이관 시작 ===")
     
     root_src = r'C:\antigravity\#1_1_PDF_Download\PDF_Storage\경기도 수원시'
     target_dir = r'C:\antigravity\#2\data'
+    config_src = r'C:\antigravity\#1_2_PDF_CSV\config\geo_settings.json'
+    config_dest_dir = r'C:\antigravity\#2\config'
     os.makedirs(target_dir, exist_ok=True)
+    os.makedirs(config_dest_dir, exist_ok=True)
+
+    # M0: Config Sync (SSOT)
+    if os.path.exists(config_src):
+        shutil.copy2(config_src, os.path.join(config_dest_dir, 'geo_settings.json'))
+        print("  [Config] Sync geo_settings.json to #2/config/")
 
     sources = [
         ("수원시권선구", os.path.join(root_src, '수원시권선구', '수원시권선구_통합_데이터.csv')),
         ("수원시장안구", os.path.join(root_src, '수원시장안구', '수원시장안구_통합_데이터.csv')),
-        ("수원시팔달구", os.path.join(root_src, '수원시팔달구', '수원시팔달구_통합_데이터_v2.csv')),
+        ("수원시팔달구", os.path.join(root_src, '수원시팔달구', '수원시팔달구_통합_데이터.csv')),
     ]
 
     # M1: Load and Concat
@@ -23,6 +33,16 @@ def integrate():
     for name, path in sources:
         if os.path.exists(path):
             df_part = pd.read_csv(path, encoding='utf-8-sig')
+            
+            # [Stage 54-Final] 팔달구 접두사 누락 방지
+            if name == "수원시팔달구":
+                def add_paldal_prefix(pname):
+                    pname = str(pname)
+                    if not pname.startswith("수원시팔달구_"):
+                        return f"수원시팔달구_{pname}"
+                    return pname
+                df_part['프로젝트명'] = df_part['프로젝트명'].apply(add_paldal_prefix)
+                
             print(f"  [Load] {name}: {len(df_part)} rows")
             dfs.append(df_part)
             total_src_rows += len(df_part)
@@ -35,6 +55,34 @@ def integrate():
 
     merged = pd.concat(dfs, ignore_index=True)
     print(f"  [Merge] Combined total: {len(merged)} rows")
+
+    # M1-1: Force Recompute Coordinates with Latest Logic
+    print("  [Recompute] Applying latest coordinate correction logic...")
+    from core.coordinate_transformer import normalize_coordinates
+    
+    new_coords = []
+    for idx, row in merged.iterrows():
+        # [Strict Rule] 원본 TM 데이터('경도', '위도')가 있으면 최우선 사용
+        # lon_wgs84는 이미 변환된 값일 수 있으므로 폴백으로만 사용
+        raw_x = row.get('경도') if pd.notna(row.get('경도')) else row.get('lon_wgs84')
+        raw_y = row.get('위도') if pd.notna(row.get('위도')) else row.get('lat_wgs84')
+        
+        bh_id = row.get('시추공명', 'Unknown')
+        
+        # meta_crs가 'EPSG:'로 시작하지 않는 노이즈(REJECT_OUTLIER 등)면 None 처리하여 재탐색 유도
+        meta_crs = row.get('meta_crs')
+        if not str(meta_crs).startswith('EPSG:'):
+            meta_crs = None
+            
+        lon, lat, tmx, tmy, final_epsg = normalize_coordinates(
+            raw_x, raw_y, 
+            borehole_id=bh_id, 
+            source_crs=meta_crs
+        )
+        new_coords.append((lon, lat, tmx, tmy, final_epsg))
+    
+    coords_df = pd.DataFrame(new_coords, columns=['lon_wgs84', 'lat_wgs84', 'tm_x', 'tm_y', 'meta_crs'])
+    merged[['lon_wgs84', 'lat_wgs84', 'tm_x', 'tm_y', 'meta_crs']] = coords_df
 
     # M2: Global Natural Sort
     print("  [Sort] Applying global natural sort...")
@@ -54,15 +102,57 @@ def integrate():
     diff = orig_len - len(merged)
     print(f"  [Dedupe] Removed {diff} duplicate rows. Final row count: {len(merged)}")
 
+    # M3-1: Spatial Geo-Fence (Smart Validation)
+    print("  [Geo-Fence] Applying Smart Spatial Validation (Hard/Soft/Reject)...")
+    validator = SpatialValidator()
+    
+    results = []
+    for idx, row in merged.iterrows():
+        lon, lat = row['lon_wgs84'], row['lat_wgs84']
+        
+        # [Stage 55] lon/lat이 숫자가 아닌 경우(변환 실패 등) 처리
+        try:
+            lon_f = float(lon)
+            lat_f = float(lat)
+            status = validator.classify(lon_f, lat_f)
+        except (ValueError, TypeError):
+            status = 'reject'
+            
+        results.append(status)
+    
+    merged['spatial_status'] = results
+    
+    # is_buffer_zone 태그 부착 (UI 시각화용)
+    merged['is_buffer_zone'] = merged['spatial_status'] == 'soft'
+    
+    mask_normal = merged['spatial_status'].isin(['hard', 'soft'])
+    normal_df = merged[mask_normal].copy()
+    quarantine_df = merged[~mask_normal].copy()
+    
+    print(f"  [Geo-Fence] Normal(Hard/Soft): {len(normal_df)} rows, Quarantined(Reject): {len(quarantine_df)} rows")
+    
+    if not quarantine_df.empty:
+        q_out = os.path.join(target_dir, '수원시_전체_격리_시추데이터.csv')
+        quarantine_df.to_csv(q_out, index=False, encoding='utf-8-sig')
+        print(f"  [Quarantine] Saved outliers to: {q_out}")
+        
+    merged = normal_df # 이후 저장은 정상 데이터만 진행
+
+    # M3-2: Remove TM coordinates for consistency (Jangan/Paldal format unification)
+    print("  [Standardize] Removing TM coordinate columns (tm_x, tm_y)...")
+    merged = merged.drop(columns=[c for c in ['tm_x', 'tm_y'] if c in merged.columns])
+
     # M4: Save CSV to #2/data
     csv_out = os.path.join(target_dir, '수원시_전체_통합_시추데이터.csv')
     try:
         merged.to_csv(csv_out, index=False, encoding='utf-8-sig')
-        print(f"  [Save] CSV: {csv_out}")
+        print(f"  [Save] CSV (Cleaned): {csv_out}")
     except PermissionError:
-        csv_out = csv_out.replace(".csv", "_v2.csv")
-        merged.to_csv(csv_out, index=False, encoding='utf-8-sig')
-        print(f"  [WARN] Permission Denied. Saved CSV as: {csv_out}")
+        print(f"  [Error] Permission Denied. Close the file if it's open: {csv_out}")
+        # Fallback to v2 if necessary
+        csv_out_v2 = csv_out.replace(".csv", "_v2.csv")
+        merged.to_csv(csv_out_v2, index=False, encoding='utf-8-sig')
+        print(f"  [WARN] Saved CSV as: {csv_out_v2}")
 
     # M5: Save JSON to #2/data
     json_out = os.path.join(target_dir, '수원시_전체_통합_시추데이터.json')
@@ -88,6 +178,9 @@ def integrate():
                 "lon_wgs84": float(first_row['lon_wgs84']) if pd.notnull(first_row['lon_wgs84']) else None,
                 "lat_wgs84": float(first_row['lat_wgs84']) if pd.notnull(first_row['lat_wgs84']) else None,
                 "elevation": float(first_row['표고']) if pd.notnull(first_row['표고']) else None,
+                "is_buffer_zone": bool(first_row['is_buffer_zone']), # [Stage 54]
+                "spatial_status": str(first_row.get('spatial_status', 'unknown')),
+                "meta_crs": str(first_row.get('meta_crs', 'N/A')),
                 "layers": []
             }
             for _, row in bh_group.iterrows():

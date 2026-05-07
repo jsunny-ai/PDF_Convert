@@ -13,7 +13,10 @@ import logging
 from typing import List, Dict, Tuple
 
 from parsers.hwpx_converter import batch_convert_docx_to_hwpx
-from parsers.hwp_indexed_extractor import clean_float, normalize_bh_id, normalize_strata, parse_coordinates
+from parsers.hwp_indexed_extractor import (
+    clean_float, normalize_bh_id, normalize_strata, 
+    parse_coordinates, extract_crs_from_page
+)
 from core.table_merger import merge_multi_page_tables
 import opendataloader_pdf
 import time
@@ -42,6 +45,21 @@ class MasterHybridExtractor:
         # 파일 형식 판별 및 준비 (PDF, DOCX -> HWPX 전환)
         hwpx_path = self._prepare_hwpx(source_path)
         pdf_path = self._prepare_pdf(source_path)
+        
+        # [CRS Detection] PDF 첫 페이지에서 좌표계 메타데이터 추출
+        source_crs = None
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                import fitz
+                doc = fitz.open(pdf_path)
+                page0_text = doc[0].get_text() if len(doc) > 0 else ""
+                from parsers.hwp_indexed_extractor import extract_crs_from_page
+                source_crs = extract_crs_from_page(page_text=page0_text, page=doc[0] if len(doc) > 0 else None)
+                if source_crs:
+                    logger.info(f"   ㄴ [CRS] 좌표계 감지: {source_crs}")
+                doc.close()
+            except Exception as e:
+                logger.warning(f"   ㄴ [CRS] 좌표계 감지 실패: {e}")
         
         # -----------------------------
         # Tier 1 (Main Engine): HWPX Structural Parsing (or ODL Fallback for PDF)
@@ -131,6 +149,7 @@ class MasterHybridExtractor:
                 row["경도"] = meta.get("경도", row["경도"])
                 row["위도"] = meta.get("위도", row["위도"])
                 row["표고"] = meta.get("표고", row["표고"])
+                row["meta_crs"] = meta.get("meta_crs", None)
         else:
             logger.info(f"   ㄴ [Tier 2] 결측치 없음 (통과)")
 
@@ -145,39 +164,67 @@ class MasterHybridExtractor:
                 # 정책에 따라 강제 중단하거나 오류 로그만 남기고 속행할 수 있음
         
         # -----------------------------
-        # 최종 무결성 검증 (Strict Data Integrity Check)
+        # 최종 무결성 검증 (Project-based Clustering Validation)
         # -----------------------------
         from core.coordinate_transformer import normalize_coordinates
+        from core.spatial_validator import SpatialValidator
+        validator = SpatialValidator()
         
-        verified_data = []
+        # 1차 변환 수행
+        temp_data = []
+        coords_for_clustering = []
+        
         for row in raw_data:
-            # 필수 필드 결측 여부 확인 (상심도/하심도/지층명은 필수, 좌표는 선택)
             mandatory_fields = ["상심도", "하심도", "지층명"]
             if any(str(row.get(f, "N/A")) == "N/A" for f in mandatory_fields):
-                # 시추공명이 있는 경우에만 경고 출력
                 if row.get("시추공명") != "UNKNOWN":
-                    logger.error(f"   [유실 차단] {project_name} - {row.get('시추공명')} 필수 정보(심도/지층) 결측 발견. 행 제외 처리.")
+                    logger.error(f"   [유실 차단] {project_name} - {row.get('시추공명')} 필수 정보 결측.")
                 continue
                 
-            # 좌표 정규화 (결측 시 빈 값 반환)
-            lon, lat, tmx, tmy = normalize_coordinates(
+            lon, lat, tmx, tmy, final_epsg = normalize_coordinates(
                 row.get("경도"), 
                 row.get("위도"), 
-                borehole_id=row.get("시추공명", "Unknown")
+                borehole_id=row.get("시추공명", "Unknown"),
+                source_crs=row.get("meta_crs") or source_crs
             )
             row["lon_wgs84"] = lon
             row["lat_wgs84"] = lat
             row["tm_x"] = tmx
             row["tm_y"] = tmy
+            row["meta_crs"] = final_epsg
             
-            verified_data.append(row)
+            temp_data.append(row)
+            if lon != "" and lat != "":
+                coords_for_clustering.append((float(lon), float(lat)))
+            else:
+                coords_for_clustering.append(None)
+
+        # 2차: 프로젝트 단위 군집 검증
+        valid_coords = [c for c in coords_for_clustering if c is not None]
+        if valid_coords:
+            cluster_results = validator.validate_project_clustering(valid_coords)
+            
+            # 결과 매핑
+            c_idx = 0
+            for i, row in enumerate(temp_data):
+                if coords_for_clustering[i] is not None:
+                    is_valid_cluster = cluster_results[c_idx]
+                    if not is_valid_cluster:
+                        logger.warning(f"   [Outlier Reject] {project_name} - {row.get('시추공명')} 군집 이탈 판정.")
+                        row["lon_wgs84"] = ""
+                        row["lat_wgs84"] = ""
+                        row["tm_x"] = ""
+                        row["tm_y"] = ""
+                        row["meta_crs"] = "REJECT_OUTLIER"
+                    c_idx += 1
+        
+        verified_data = temp_data
 
         if not verified_data:
-            logger.error(f"   [FAIL] {project_name} - 유효한 데이터가 0건입니다. (추출 실패)")
+            logger.error(f"   [FAIL] {project_name} - 유효한 데이터가 0건입니다.")
             return []
             
         logger.info(f"   ㄴ [Merge] 공통 후처리(심도 보정 및 병합) 적용")
-        # [Final SSOT Enforcement] 최종 확정 project_name을 전역 브로드캐스팅하여 최종 정합성 보장
         for row in verified_data:
             row["프로젝트명"] = project_name
         merged_data = merge_multi_page_tables([{"data": verified_data}])
@@ -331,6 +378,13 @@ class MasterHybridExtractor:
                 current_meta["경도"] = recovered["lon"]
             if current_meta["표고"] == "N/A" and recovered.get("el"):
                 current_meta["표고"] = recovered["el"]
+            
+            # [Stage 54] 문서 헤더에서 명시적 좌표계(CRS) 추출
+            text_full = page.get_text("text")
+            crs_code = extract_crs_from_page(page_text=text_full, page=page)
+            current_meta["meta_crs"] = crs_code
+            if crs_code:
+                logger.info(f"      * [Metadata] 문서 명시 좌표계 발견: {crs_code}")
                 
         except Exception as e:
             logger.error(f"[Tier 2] Spatial Recovery Error: {e}")

@@ -180,7 +180,7 @@ def find_value_by_spatial_proximity(page, keywords, y_limit=350):
                         val = clean_float(m.group(1))
                         if val is not None:
                             if is_coord_kw:
-                                if not (100000 <= val <= 1000000): continue 
+                                if not (10000 <= val <= 1000000): continue 
                             else: # 표고
                                 if not (-100 <= val <= 5000): continue
                             
