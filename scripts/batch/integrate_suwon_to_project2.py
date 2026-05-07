@@ -1,5 +1,17 @@
+"""오프라인 일회성 유틸리티 — 라이브 서비스 경로 아님.
+
+수원시 3개 구 산출물을 #2 프로젝트(V-World 연계)로 이관하는 데이터 마이그레이션
+스크립트. 외부 절대경로(`C:\\antigravity\\#1_1_PDF_Download`, `C:\\antigravity\\#2`)에
+하드코딩되어 있으므로 환경이 동일하지 않다면 실행하지 말 것.
+
+실행: 프로젝트 루트에서 `python scripts/batch/integrate_suwon_to_project2.py`
+"""
+import sys, os
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 import pandas as pd
-import os
 import json
 import re
 from parsers.pdf_parser_odl import natural_sort_key

@@ -31,7 +31,12 @@
  ┣ 📂 core/          # 하이브리드 메인 엔진, 테이블 병합, 좌표계 정규화 등 핵심 비즈니스 로직
  ┣ 📂 parsers/       # HWPX, PyMuPDF, ODL 등 각 모듈별 독립 텍스트/테이블 추출기
  ┣ 📂 web/           # 파일 업로드, 진행 상태 UI 및 다운로드 통신을 담당하는 프론트엔드 (app.js, index.html)
- ┣ 📂 tests/         # 엔진 검증, 테이블 병합 테스트, PDF 구조 분석용 테스트 스크립트 모음
- ┣ 📂 data/          # 원본 PDF, 임시 이미지, 추출된 CSV/JSON 결과물 및 로깅 데이터 격리 보관소
+ ┣ 📂 config/        # geo_settings.json 등 환경별 설정 파일
+ ┣ 📂 docs/          # 좌표계 감사·기술 가이드 등 사람이 읽는 기술 문서 (런타임 무관)
+ ┣ 📂 scripts/
+ ┃   ┣ 📂 batch/     # 일회성 오프라인 데이터 마이그레이션 스크립트 (라이브 서비스 경로 아님)
+ ┃   ┗ 📂 smoke/     # 라이브 서버 대상 수동 호출 스모크 스크립트
+ ┣ 📂 data/          # 원본 PDF, 추출된 CSV/JSON 결과물 격리 보관소 (.gitignore)
  ┣ 📜 server.py      # Flask 기반 백엔드 웹 서버 라우팅 (API Endpoints)
- ┗ 📜 run_borehole_system.bat # 원클릭 서버 가동 및 웹 브라우저 자동 실행 배치 파일
+ ┣ 📜 run_borehole_system.bat # 원클릭 서버 가동 및 웹 브라우저 자동 실행 배치 파일
+ ┗ 📜 run_java.bat   # JDK 환경 변수 부트스트랩

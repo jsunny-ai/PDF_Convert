@@ -8,10 +8,12 @@ import logging
 import unicodedata
 import fitz  # PyMuPDF
 
-# 기존 유틸 함수 재사용
+# 기존 유틸 함수 재사용 (정규 정의는 parsers.pdf_parser_odl 에 위치)
 import parsers.pdf_parser_odl as ppo
 normalize_strata_name = ppo.normalize_strata_name
 natural_sort_key = ppo.natural_sort_key
+clean_float = ppo.clean_float
+validate_suwon_coordinates = ppo.validate_suwon_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -31,42 +33,6 @@ def clean_cell_text(raw):
     # 연속 공백 → 단일 공백
     text = re.sub(r'\s{2,}', ' ', text)
     return text.strip()
-
-
-def clean_float(val):
-    """숫자 추출: 숫자, 소수점, 마이너스 외의 문자를 완벽히 제거하고 float로 변환"""
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s:
-        return None
-    # 범위 표기(~) → 마지막 값 사용
-    if '~' in s:
-        s = s.split('~')[-1]
-    
-    # 1. 숫자, 소수점, 마이너스 부호만 남기기 (정규식 강화)
-    cleaned = re.sub(r'[^\d\.\-]', '', s)
-    
-    # 2. 다중 소수점 처리 (예: 123.45.67 -> 123.4567)
-    if cleaned.count('.') > 1:
-        parts = cleaned.split('.')
-        cleaned = parts[0] + '.' + "".join(parts[1:])
-        
-    if not cleaned or cleaned == '.' or cleaned == '-': return None
-    
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
-
-def validate_suwon_coordinates(x, y):
-    """
-    수원시 로컬 좌표계 범위(TM) 검증 (1차 수치 검증)
-    """
-    if x is None or y is None: return False
-    x_valid = (170000 <= x <= 230000)
-    y_valid = (470000 <= y <= 550000)
-    return x_valid and y_valid
 
 
 def normalize_bh_id(raw_id):

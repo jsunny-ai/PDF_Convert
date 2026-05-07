@@ -11,7 +11,7 @@ echo [Info] Moved to directory: C:\antigravity\#1_2_PDF_CSV
 :: 2. 보조 데몬(Sentinel Daemon) 백그라운드 실행
 ::    (루트 폴더에 있는 sentinel_daemon.py를 함께 실행함)
 echo [Info] Starting Sentinel Daemon...
-start "FileName Sentinel Daemon" cmd /k "python sentinel_daemon.py"
+start "FileName Sentinel Daemon" cmd /k "python core\sentinel_daemon.py"
 
 :: 3. 메인 서버(server.py) 실행
 echo [Info] Starting GeoBIM Borehole Server...

@@ -1,4 +1,17 @@
-import os
+"""오프라인 일회성 유틸리티 — 라이브 서비스 경로 아님.
+
+수원시 3개 구(권선구·장안구·팔달구) PDF 일괄 처리용. 라이브 Flask 파이프라인
+(`server.py` → `MasterHybridExtractor`)과 동일한 엔진을 사용하지만 외부 절대경로에
+의존하므로 일반 사용자가 호출하지 말 것. `data/03_final/` 의 산출물 재생성이 필요한
+경우에만 직접 실행한다.
+
+실행: 프로젝트 루트에서 `python scripts/batch/run_suwon_batch_all.py`
+"""
+import sys, os
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 import logging
 import pandas as pd
 from core.master_hybrid_extractor import MasterHybridExtractor

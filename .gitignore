@@ -18,7 +18,6 @@ extension_downloader/
 __pycache__/
 *.py[cod]
 scratch/
-scripts/
 .idea/
 .vscode/
 
