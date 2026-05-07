@@ -1,6 +1,7 @@
 # Project Data
 data/
 backup/
+_archive/
 *.csv
 *.pdf
 *.zip
