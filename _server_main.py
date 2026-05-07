@@ -44,8 +44,12 @@ def _find_pdf_files(search_dir):
 
 
 def _auto_process(pdf_files):
-    """발견된 PDF를 MasterHybridExtractor로 일괄 처리하고 결과물/ 에 저장."""
-    import re
+    """발견된 PDF를 MasterHybridExtractor로 일괄 처리하고 결과물/ 에 저장.
+
+    출력: 결과물/통합_결과.csv  +  결과물/통합_결과.json  (파일 2개)
+    프로젝트명: {상위폴더명}_{파일명}  (예: PJT1_보고서A)
+               상위폴더 없으면 파일명만 사용
+    """
     import json
     import pandas as pd
     import subprocess
@@ -61,55 +65,25 @@ def _auto_process(pdf_files):
 
     for i, pdf_path in enumerate(pdf_files, 1):
         basename = os.path.basename(pdf_path)
-        print(f"  [{i}/{len(pdf_files)}] 처리 중: {basename} ...", flush=True)
+
+        # ── 프로젝트명 = {상위폴더명}_{파일명} ──────────────────────────────────
+        rel = os.path.relpath(pdf_path, BASE_DIR)
+        parts = rel.split(os.sep)
+        file_stem = os.path.splitext(parts[-1])[0]
+        project_label = f"{parts[0]}_{file_stem}" if len(parts) > 1 else file_stem
+
+        print(f"  [{i}/{len(pdf_files)}] 처리 중: {rel}  →  프로젝트명: {project_label}",
+              flush=True)
         try:
-            project_name = os.path.splitext(basename)[0]
-            merged = extractor.process_file(pdf_path, project_name)
+            merged = extractor.process_file(pdf_path, project_label)
 
             if merged:
-                extracted_name = merged[0].get("프로젝트명", "")
-                if extracted_name and extracted_name != "N/A":
-                    project_name = extracted_name
+                # 모든 행의 프로젝트명을 폴더 기반 이름으로 강제 덮어쓰기
+                for row in merged:
+                    row["프로젝트명"] = project_label
 
                 all_rows.extend(merged)
-
-                safe_name = re.sub(r'[\\/*?:"<>|]', "", project_name)
-
-                # 개별 CSV 저장
-                df = pd.DataFrame(merged)
-                for col in column_order:
-                    if col not in df.columns:
-                        df[col] = ''
-                df[column_order].to_csv(
-                    os.path.join(results_dir, f"{safe_name}.csv"),
-                    index=False, encoding='utf-8-sig'
-                )
-
-                # 개별 JSON 저장
-                boreholes_dict = {}
-                for row in merged:
-                    b_id = row.get("시추공명", "UNKNOWN")
-                    if b_id not in boreholes_dict:
-                        boreholes_dict[b_id] = {
-                            "borehole_id": b_id,
-                            "longitude": row.get("lon_wgs84", ""),
-                            "latitude": row.get("lat_wgs84", ""),
-                            "elevation": row.get("표고", ""),
-                            "strata": []
-                        }
-                    boreholes_dict[b_id]["strata"].append({
-                        "soil_type": row.get("지층명", ""),
-                        "depth_top": row.get("상심도", ""),
-                        "depth_bottom": row.get("하심도", "")
-                    })
-                json_obj = {"project_name": project_name,
-                            "boreholes": list(boreholes_dict.values())}
-                with open(os.path.join(results_dir, f"{safe_name}.json"),
-                          'w', encoding='utf-8') as f:
-                    json.dump(json_obj, f, ensure_ascii=False, indent=2)
-
-                print(f"       완료: {len(merged)}행 → {safe_name}.csv / .json",
-                      flush=True)
+                print(f"       완료: {len(merged)}행 추출", flush=True)
             else:
                 print(f"       [경고] 데이터를 추출하지 못했습니다: {basename}",
                       flush=True)
@@ -117,19 +91,56 @@ def _auto_process(pdf_files):
         except Exception as exc:
             print(f"       [오류] {basename}: {exc}", flush=True)
 
-    # 통합 CSV 저장
-    if all_rows:
-        combined_df = pd.DataFrame(all_rows)
-        for col in column_order:
-            if col not in combined_df.columns:
-                combined_df[col] = ''
-        combined_df[column_order].to_csv(
-            os.path.join(results_dir, '통합_결과.csv'),
-            index=False, encoding='utf-8-sig'
-        )
-        print(f"\n  통합 CSV 저장 완료: 통합_결과.csv ({len(all_rows)}행)", flush=True)
+    if not all_rows:
+        print("\n  [경고] 추출된 데이터가 없습니다.", flush=True)
+        print("\n  처리가 완료되었습니다. Enter 를 누르면 종료됩니다.")
+        input()
+        return
 
-    # 결과물 폴더 탐색기로 열기
+    # ── 통합 CSV 저장 ──────────────────────────────────────────────────────────
+    combined_df = pd.DataFrame(all_rows)
+    for col in column_order:
+        if col not in combined_df.columns:
+            combined_df[col] = ''
+    combined_df[column_order].to_csv(
+        os.path.join(results_dir, '통합_결과.csv'),
+        index=False, encoding='utf-8-sig'
+    )
+    print(f"\n  통합 CSV 저장 완료: 통합_결과.csv ({len(all_rows)}행)", flush=True)
+
+    # ── 통합 JSON 저장 (프로젝트별 boreholes 구조) ────────────────────────────
+    projects_dict: dict = {}
+    for row in all_rows:
+        pname = row.get("프로젝트명", "UNKNOWN")
+        if pname not in projects_dict:
+            projects_dict[pname] = {"project_name": pname, "boreholes": {}}
+        b_id = row.get("시추공명", "UNKNOWN")
+        if b_id not in projects_dict[pname]["boreholes"]:
+            projects_dict[pname]["boreholes"][b_id] = {
+                "borehole_id": b_id,
+                "longitude": row.get("lon_wgs84", ""),
+                "latitude": row.get("lat_wgs84", ""),
+                "elevation": row.get("표고", ""),
+                "strata": []
+            }
+        projects_dict[pname]["boreholes"][b_id]["strata"].append({
+            "soil_type": row.get("지층명", ""),
+            "depth_top": row.get("상심도", ""),
+            "depth_bottom": row.get("하심도", "")
+        })
+
+    json_output = {
+        "projects": [
+            {**v, "boreholes": list(v["boreholes"].values())}
+            for v in projects_dict.values()
+        ]
+    }
+    with open(os.path.join(results_dir, '통합_결과.json'), 'w', encoding='utf-8') as f:
+        json.dump(json_output, f, ensure_ascii=False, indent=2)
+    print(f"  통합 JSON 저장 완료: 통합_결과.json ({len(projects_dict)}개 프로젝트)",
+          flush=True)
+
+    # ── 결과물 폴더 탐색기로 열기 ─────────────────────────────────────────────
     try:
         subprocess.Popen(['explorer', results_dir])
     except Exception:
