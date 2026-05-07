@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:\\\\antigravity\\\\#1_2_PDF_CSV\")",
+      "Read(//c/antigravity/#1_2_PDF_CSV/data/**)",
+      "Read(//c/antigravity/#1_2_PDF_CSV/_archive/**)",
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(python -c ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git -C \"C:\\\\antigravity\\\\#1_2_PDF_CSV\" merge claude/determined-dubinsky-3e5edd --no-edit)",
+      "Bash(python -c \"import core.master_hybrid_extractor; import parsers.pdf_parser_odl; import core.table_merger; import core.coordinate_transformer; print\\('OK'\\)\")",
+      "Bash(git -C \"C:\\\\antigravity\\\\#1_2_PDF_CSV\" worktree remove \".claude\\\\worktrees\\\\determined-dubinsky-3e5edd\")",
+      "Bash(git -C \"C:\\\\antigravity\\\\#1_2_PDF_CSV\" worktree remove --force \".claude\\\\worktrees\\\\determined-dubinsky-3e5edd\")",
+      "Bash(Get-ChildItem \"C:\\\\antigravity\\\\#1_2_PDF_CSV\" -Exclude \".claude\",\".git\",\"data\",\"_archive\")",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Sort-Object PSIsContainer -Descending)"
+    ]
+  }
+}

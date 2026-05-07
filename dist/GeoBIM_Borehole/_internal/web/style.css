@@ -1,0 +1,347 @@
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #f0f0f0;
+    --text-secondary: #9ca3af;
+    --accent-color: #3b82f6;
+    
+    /* 지층별 색상 테마 (사용자 정의 반영) */
+    --color-soil: #a3e635;        /* 토사: 연초록 (Lime Green) */
+    --color-weathered: #facc15;   /* 풍화암: 노랑 (Yellow) */
+    --color-ripping: #fb923c;     /* 리핑암(연암): 주황 (Orange) */
+    --color-blasting: #a855f7;    /* 발파암(경암): 보라 (Purple) */
+}
+
+/* 프로젝트별 그룹화 헤더 스타일 */
+.project-header {
+    background: rgba(147, 51, 234, 0.15);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #c084fc;
+    margin-top: 16px;
+    margin-bottom: 4px;
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.project-header::before {
+    content: '📁';
+    font-size: 0.9rem;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background-color: #0f172a; /* 딥 다크 배경 */
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Background Glowing Blobs (우아한 백그라운드 블러 파티클) */
+.background-blobs {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.blob {
+    position: absolute;
+    filter: blur(80px);
+    border-radius: 50%;
+    animation: drift 10s infinite alternate ease-in-out;
+}
+
+.blob-1 {
+    width: 400px;
+    height: 400px;
+    background: rgba(59, 130, 246, 0.3);
+    top: -100px;
+    left: -100px;
+}
+
+.blob-2 {
+    width: 500px;
+    height: 500px;
+    background: rgba(147, 51, 234, 0.2);
+    bottom: -150px;
+    right: -100px;
+    animation-delay: -5s;
+}
+
+@keyframes drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, 50px) scale(1.1); }
+}
+
+/* Glassmorphism Panel (핵심 다차원 투명도 레이아웃) */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.dashboard-container {
+    width: 1400px;
+    max-width: 95vw;
+    height: 90vh;
+    border-radius: 24px;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 좌측 사이드바 컨트롤 */
+.sidebar {
+    width: 300px;
+    border-right: 1px solid var(--glass-border);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.logo h2 {
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+    background: linear-gradient(to right, #60a5fa, #c084fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.upload-section {
+    text-align: center;
+}
+
+.btn-primary {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid #3b82f6;
+    color: #fff;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -10px #3b82f6;
+}
+
+.sub-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 12px;
+    line-height: 1.4;
+}
+
+.file-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.file-item {
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.file-item:hover, .file-item.active {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--glass-border);
+}
+
+.file-item-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #fff;
+}
+
+.file-item-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* 우측 컨텐츠 뷰어 영역 */
+.content-area {
+    flex: 1;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.content-header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+}
+
+.meta-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.meta-tag {
+    background: rgba(0,0,0,0.3);
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+}
+
+.visualization-stage {
+    flex: 1;
+    display: flex;
+    gap: 32px;
+    min-height: 0;
+}
+
+/* 동적 시추주상도 기둥 그래픽 구현 */
+.strata-visualizer {
+    flex: 0 0 160px; /* 기둥 두께 설정 */
+    background: rgba(0,0,0,0.4);
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.placeholder-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    width: 80%;
+    line-height: 1.5;
+}
+
+/* 지층(Layer) 블럭 */
+.strata-layer {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+}
+
+.strata-layer:hover {
+    filter: brightness(1.2);
+    z-index: 10;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    transform: scale(1.02);
+    cursor: crosshair;
+}
+
+/* Javascript가 할당할 동적 클래스별 배경색 부여 */
+/* [Stage 47] 4대 대분류 체계 */
+.strata-layer.토사 { background: var(--color-soil); }
+.strata-layer.풍화암 { background: var(--color-weathered); }
+.strata-layer.연암 { background: var(--color-ripping); }
+.strata-layer.경암 { background: var(--color-blasting); }
+
+/* Raw Data 테이블 */
+.table-container {
+    flex: 1;
+    overflow-y: auto;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+}
+
+.glass-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.glass-table th, .glass-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 0.9rem;
+}
+
+.glass-table th {
+    background: rgba(0,0,0,0.6);
+    font-weight: 600;
+    color: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    letter-spacing: 1px;
+}
+
+.glass-table tr:hover {
+    background: rgba(255,255,255,0.05); /* 마우스 호버 대응 */
+}
+
+/* Backend 통신 대기 로딩 오버레이 디자인 */
+.loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 24px;
+    gap: 20px;
+    text-align: center;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 6px solid rgba(255,255,255,0.1);
+    border-top-color: #9333ea;
+    border-left-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+}
+
+@keyframes spin { 
+    100% { transform: rotate(360deg); } 
+}
