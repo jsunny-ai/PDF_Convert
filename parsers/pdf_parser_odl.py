@@ -408,15 +408,15 @@ def extract_all_from_md(md_path: str, project_name: str = "", pdf_path: str = No
                                     current_bh_id = new_id
                                 section_idx += 1
                                 last_processed_depth = -1.0
-                                    # ID 전환 시 주변 텍스트에서 메타데이터 보강 시도
-                                    ctx_start = max(0, i - 20)
-                                    ctx_text = "\n".join(lines[ctx_start:i+1])
-                                    if current_bh_id not in bh_metadata:
-                                        bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
-                                    for kw, key in [("X(N)", "위도"), ("Y(E)", "경도"), ("표고", "표고"), ("EL", "표고")]:
-                                        if bh_metadata[current_bh_id][key] == "N/A":
-                                            val = find_value_in_cells([ctx_text], [kw])
-                                            if val is not None: bh_metadata[current_bh_id][key] = val
+                                # ID 전환 시 주변 텍스트에서 메타데이터 보강 시도
+                                ctx_start = max(0, i - 20)
+                                ctx_text = "\n".join(lines[ctx_start:i+1])
+                                if current_bh_id not in bh_metadata:
+                                    bh_metadata[current_bh_id] = {"경도": "N/A", "위도": "N/A", "표고": "N/A"}
+                                for kw, key in [("X(N)", "위도"), ("Y(E)", "경도"), ("표고", "표고"), ("EL", "표고")]:
+                                    if bh_metadata[current_bh_id][key] == "N/A":
+                                        val = find_value_in_cells([ctx_text], [kw])
+                                        if val is not None: bh_metadata[current_bh_id][key] = val
                             except ValueError: pass
                         
                         if current_bh_id not in bh_metadata:
