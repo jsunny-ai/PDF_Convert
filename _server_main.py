@@ -43,6 +43,58 @@ def _find_pdf_files(search_dir):
     return found
 
 
+def _try_extract_project_name(pdf_path):
+    """PDF 첫 페이지 표/텍스트에서 조사명·공사명·용역명·과업명을 직접 추출.
+    찾지 못하면 None 반환."""
+    import re
+    _KW = {'조사명', '공사명', '용역명', '과업명'}
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        if not len(doc):
+            doc.close()
+            return None
+        page = doc[0]
+
+        # ── 방법 1: 표 셀 레이블-값 쌍 탐색 ─────────────────────────────────
+        try:
+            tables = page.find_tables()
+            for tbl in tables.tables:
+                for row in tbl.extract():
+                    for j, cell in enumerate(row):
+                        text = str(cell).strip() if cell else ""
+                        if text in _KW and j + 1 < len(row):
+                            val = str(row[j + 1]).strip() if row[j + 1] else ""
+                            if val and val not in _KW and len(val) >= 2:
+                                doc.close()
+                                return val
+        except Exception:
+            pass
+
+        # ── 방법 2: 텍스트 라인 탐색 (같은 줄 / 다음 줄) ─────────────────────
+        lines = [l.strip() for l in page.get_text("text").split('\n') if l.strip()]
+        for k, line in enumerate(lines):
+            # 같은 줄: "조사명 : 수원시팔달구지반조사"
+            m = re.search(r'(?:조사명|공사명|용역명|과업명)\s*[:：]?\s*(.+)', line)
+            if m:
+                val = m.group(1).strip()
+                if val and val not in _KW and len(val) >= 2:
+                    doc.close()
+                    return val
+            # 다음 줄: 레이블 단독 → 바로 아랫줄이 값
+            if line in _KW and k + 1 < len(lines):
+                val = lines[k + 1]
+                if val and val not in _KW and len(val) >= 2 \
+                        and not re.match(r'^[\d\s\-\.\(\)]+$', val):
+                    doc.close()
+                    return val
+
+        doc.close()
+    except Exception:
+        pass
+    return None
+
+
 def _auto_process(pdf_files):
     """발견된 PDF를 MasterHybridExtractor로 일괄 처리하고 결과물/ 에 저장.
 
@@ -80,12 +132,15 @@ def _auto_process(pdf_files):
             merged = extractor.process_file(pdf_path, project_label)
 
             if merged:
-                # 조사명 우선: 파이프라인이 PDF에서 추출한 이름이 폴더 기반 레이블과 다르면 사용
+                # ── 프로젝트명 결정 (우선순위 순) ───────────────────────────
+                # 1순위: 파이프라인(HWPX Tier1 / Tier2)이 추출한 조사명
                 extracted_pname = merged[0].get("프로젝트명", "")
                 if extracted_pname and extracted_pname not in ("N/A", "", project_label):
-                    final_label = extracted_pname  # 조사명 사용
+                    final_label = extracted_pname
                 else:
-                    final_label = file_stem        # 파일명만 (폴더 접두어 없음)
+                    # 2순위: PDF 표/텍스트 직접 스캔으로 조사명 추출
+                    scanned = _try_extract_project_name(pdf_path)
+                    final_label = scanned if scanned else file_stem  # 3순위: 파일명
 
                 for row in merged:
                     row["프로젝트명"] = final_label
