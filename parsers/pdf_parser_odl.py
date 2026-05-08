@@ -9,7 +9,16 @@ def natural_sort_key(s):
     return tuple(int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s)))
 
 def normalize_strata_name(text: str) -> str:
-    """추출된 지반명 텍스트에서 색상 정보 등을 제거하여 정규화합니다."""
+    """추출된 지반명 텍스트에서 색상 정보 등을 제거하여 정규화합니다.
+
+    처리 순서:
+      1) 색상·접미사 제거
+      2) 정확한 키워드 매칭 (기존 동작 유지)
+      3) 미지 지층명 자동 분류 휴리스틱
+         - "풍화" + "암" → 풍화암
+         - "토" 포함 / 모래·자갈·실트·점토 계열 → 토사
+         - "암" 포함 + 강도 힌트 → 경암 / 연암 / 보통암
+    """
     if not text: return "토사"
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\(.*?\)', '', text)
@@ -18,11 +27,38 @@ def normalize_strata_name(text: str) -> str:
     for color in colors: text = text.replace(color, '')
     suffixes = ['층색', '층', '표']
     for s in suffixes: text = text.replace(s, '')
-    keywords = ['매립토', '퇴적토', '풍화토', '풍화암', '연암', '보통암', '경암', '발파암', '리핑암', '화강암', '토사']
+
+    # ── 1순위: 정확한 키워드 매칭 ──────────────────────────────────────────
+    keywords = ['매립토', '퇴적토', '풍화토', '풍화암', '연암', '보통암', '경암',
+                '발파암', '리핑암', '화강암', '토사']
     for kw in keywords:
         if kw in text: return kw
+
+    # ── 2순위: 미지 지층명 자동 분류 휴리스틱 ─────────────────────────────
     text = re.sub(r'[^\w\s]', '', text).strip()
-    return text if text else "토사"
+    if not text:
+        return '토사'
+
+    # 풍화암 계열: "풍화" + "암" 동시 포함 (풍화암질, 부분풍화암 등)
+    if '풍화' in text and '암' in text:
+        return '풍화암'
+
+    # 토사 계열: "토" 포함(전답토, 점성토, 사질토 …)
+    #           또는 모래·자갈·실트·점토 관련 단어 포함
+    _SOIL_WORDS = ['모래', '자갈', '실트', '점토', '사력', '사질', '충적', '붕적']
+    if '토' in text or any(w in text for w in _SOIL_WORDS):
+        return '토사'
+
+    # 암 계열: "암" 포함 → 강도 힌트로 세분
+    if '암' in text:
+        if any(w in text for w in ['경', '단단', '견고']):
+            return '경암'
+        if any(w in text for w in ['연', '약', '무른']):
+            return '연암'
+        return '보통암'
+
+    # 최종 fallback
+    return '토사'
 
 def classify_strata_from_text(text: str, image_code: str):
     """지층 분류 엔진"""
