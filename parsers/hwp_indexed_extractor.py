@@ -231,26 +231,29 @@ def process_single_pdf_indexed(pdf_path, project_name=None):
                 bh_id_raw = table1_data[0][7]
                 bh_id = normalize_bh_id(bh_id_raw)
                 
-                if bh_id:
-                    current_bh_id = bh_id
-                    
-                    if bh_id not in boreholes:
-                        # 좌표 파싱
-                        coord_text = table1_data[1][5] if len(table1_data[1]) > 5 else ""
-                        lon, lat = parse_coordinates(coord_text)
-                        
-                        # 표고
-                        elev_raw = table1_data[1][7] if len(table1_data[1]) > 7 else None
-                        elev = clean_float(elev_raw)
-                        
-                        boreholes[bh_id] = {
-                            "meta": {
-                                "경도": lon if lon is not None else "N/A",
-                                "위도": lat if lat is not None else "N/A",
-                                "표고": elev if elev is not None else "N/A",
-                            },
-                            "strata": []
-                        }
+                if not bh_id:
+                    # 조사명/비표준 명칭인 경우 페이지 번호 기반 임시 ID 부여
+                    bh_id = f"시추-{page_idx + 1}"
+
+                current_bh_id = bh_id
+
+                if bh_id not in boreholes:
+                    # 좌표 파싱
+                    coord_text = table1_data[1][5] if len(table1_data[1]) > 5 else ""
+                    lon, lat = parse_coordinates(coord_text)
+
+                    # 표고
+                    elev_raw = table1_data[1][7] if len(table1_data[1]) > 7 else None
+                    elev = clean_float(elev_raw)
+
+                    boreholes[bh_id] = {
+                        "meta": {
+                            "경도": lon if lon is not None else "N/A",
+                            "위도": lat if lat is not None else "N/A",
+                            "표고": elev if elev is not None else "N/A",
+                        },
+                        "strata": []
+                    }
             
             if not current_bh_id:
                 continue

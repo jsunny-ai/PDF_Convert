@@ -1,3 +1,7 @@
+# Build Artifacts
+dist/
+_build_work/
+
 # Project Data
 data/
 backup/

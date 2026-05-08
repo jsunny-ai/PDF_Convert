@@ -352,7 +352,12 @@ def extract_all_from_md(md_path: str, project_name: str = "", pdf_path: str = No
         section_idx = 0
         current_page_idx = -1
         current_bh_id = None
-        if pdf_bh_ids: current_bh_id = pdf_bh_ids[0]
+        if pdf_bh_ids:
+            current_bh_id = pdf_bh_ids[0]
+        else:
+            # 표준 접두어 없는 PDF: 첫 번째 임시 ID 부여
+            pdf_bh_ids = ["시추-1"]
+            current_bh_id = "시추-1"
         
         for i in range(len(lines)):
             line = lines[i]
@@ -394,10 +399,15 @@ def extract_all_from_md(md_path: str, project_name: str = "", pdf_path: str = No
                         elif is_reset:
                             try:
                                 curr_idx = pdf_bh_ids.index(current_bh_id)
-                                if curr_idx + 1 < len(pdf_bh_ids): 
+                                if curr_idx + 1 < len(pdf_bh_ids):
                                     current_bh_id = pdf_bh_ids[curr_idx + 1]
-                                    section_idx += 1
-                                    last_processed_depth = -1.0
+                                else:
+                                    # 임시 ID 목록 소진 시 동적 확장
+                                    new_id = f"시추-{curr_idx + 2}"
+                                    pdf_bh_ids.append(new_id)
+                                    current_bh_id = new_id
+                                section_idx += 1
+                                last_processed_depth = -1.0
                                     # ID 전환 시 주변 텍스트에서 메타데이터 보강 시도
                                     ctx_start = max(0, i - 20)
                                     ctx_text = "\n".join(lines[ctx_start:i+1])

@@ -68,29 +68,36 @@ def _auto_process(pdf_files):
     for i, pdf_path in enumerate(pdf_files, 1):
         basename = os.path.basename(pdf_path)
 
-        # ── 프로젝트명 = {상위폴더명}_{파일명} ──────────────────────────────────
+        # ── 경로/파일 정보 계산 ─────────────────────────────────────────────────
         rel = os.path.relpath(pdf_path, BASE_DIR)
         parts = rel.split(os.sep)
         file_stem = os.path.splitext(parts[-1])[0]
+        # process_file 에 전달할 초기 레이블 (폴더+파일명) — 조사명 탐지 기준값으로만 사용
         project_label = f"{parts[0]}_{file_stem}" if len(parts) > 1 else file_stem
 
-        print(f"  [{i}/{len(pdf_files)}] 처리 중: {rel}  →  프로젝트명: {project_label}",
-              flush=True)
+        print(f"  [{i}/{len(pdf_files)}] 처리 중: {rel}", flush=True)
         try:
             merged = extractor.process_file(pdf_path, project_label)
 
             if merged:
-                # 모든 행의 프로젝트명을 폴더 기반 이름으로 강제 덮어쓰기
+                # 조사명 우선: 파이프라인이 PDF에서 추출한 이름이 폴더 기반 레이블과 다르면 사용
+                extracted_pname = merged[0].get("프로젝트명", "")
+                if extracted_pname and extracted_pname not in ("N/A", "", project_label):
+                    final_label = extracted_pname  # 조사명 사용
+                else:
+                    final_label = file_stem        # 파일명만 (폴더 접두어 없음)
+
                 for row in merged:
-                    row["프로젝트명"] = project_label
+                    row["프로젝트명"] = final_label
 
                 all_rows.extend(merged)
-                print(f"       완료: {len(merged)}행 추출", flush=True)
+                print(f"       완료: {len(merged)}행 추출  →  프로젝트명: {final_label}",
+                      flush=True)
             else:
                 print(f"       [경고] 데이터를 추출하지 못했습니다: {basename}",
                       flush=True)
                 failed_list.append({
-                    "프로젝트명": project_label,
+                    "프로젝트명": file_stem,
                     "파일경로": rel,
                     "실패사유": "데이터 추출 실패 (빈 결과)"
                 })
