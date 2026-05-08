@@ -54,6 +54,7 @@ def _auto_process(pdf_files):
     import pandas as pd
     import subprocess
     from core.master_hybrid_extractor import MasterHybridExtractor
+    from parsers.pdf_parser_odl import natural_sort_key
 
     results_dir = os.path.join(BASE_DIR, '결과물')
     os.makedirs(results_dir, exist_ok=True)
@@ -96,6 +97,12 @@ def _auto_process(pdf_files):
         print("\n  처리가 완료되었습니다. Enter 를 누르면 종료됩니다.")
         input()
         return
+
+    # ── 자연 정렬: 프로젝트명(숫자 포함) → 시추공명 순 ────────────────────────
+    all_rows.sort(key=lambda r: (
+        natural_sort_key(r.get("프로젝트명", "")),
+        natural_sort_key(r.get("시추공명", ""))
+    ))
 
     # ── 통합 CSV 저장 ──────────────────────────────────────────────────────────
     combined_df = pd.DataFrame(all_rows)
