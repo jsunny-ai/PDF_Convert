@@ -61,6 +61,7 @@ def _auto_process(pdf_files):
 
     extractor = MasterHybridExtractor(output_dir=BASE_DIR)
     all_rows = []
+    failed_list = []   # 추출 실패/누락 목록 {프로젝트명, 파일경로, 실패사유}
     column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고',
                     '시추공명', '상심도', '하심도', '지층명']
 
@@ -88,9 +89,29 @@ def _auto_process(pdf_files):
             else:
                 print(f"       [경고] 데이터를 추출하지 못했습니다: {basename}",
                       flush=True)
+                failed_list.append({
+                    "프로젝트명": project_label,
+                    "파일경로": rel,
+                    "실패사유": "데이터 추출 실패 (빈 결과)"
+                })
 
         except Exception as exc:
             print(f"       [오류] {basename}: {exc}", flush=True)
+            failed_list.append({
+                "프로젝트명": project_label,
+                "파일경로": rel,
+                "실패사유": str(exc)
+            })
+
+    # ── 누락 목록 저장 (실패 건이 있을 때만) ─────────────────────────────────
+    if failed_list:
+        failed_df = pd.DataFrame(failed_list, columns=['프로젝트명', '파일경로', '실패사유'])
+        failed_df.to_csv(
+            os.path.join(results_dir, '누락_목록.csv'),
+            index=False, encoding='utf-8-sig'
+        )
+        print(f"\n  [누락] {len(failed_list)}건 추출 실패 → 누락_목록.csv 저장됨",
+              flush=True)
 
     if not all_rows:
         print("\n  [경고] 추출된 데이터가 없습니다.", flush=True)
