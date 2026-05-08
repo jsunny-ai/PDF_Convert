@@ -62,7 +62,7 @@ def _auto_process(pdf_files):
     extractor = MasterHybridExtractor(output_dir=BASE_DIR)
     all_rows = []
     failed_list = []   # 추출 실패/누락 목록 {프로젝트명, 파일경로, 실패사유}
-    column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고',
+    column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', 'meta_crs', '표고',
                     '시추공명', '상심도', '하심도', '지층명']
 
     for i, pdf_path in enumerate(pdf_files, 1):
@@ -148,6 +148,7 @@ def _auto_process(pdf_files):
                 "borehole_id": b_id,
                 "longitude": row.get("lon_wgs84", ""),
                 "latitude": row.get("lat_wgs84", ""),
+                "crs": row.get("meta_crs", ""),
                 "elevation": row.get("표고", ""),
                 "strata": []
             }

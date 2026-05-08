@@ -108,7 +108,7 @@ def convert_pdf():
                 df = pd.DataFrame(merged)
                 
                 # 컬럼 순서 고정
-                column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고', '시추공명', '상심도', '하심도', '지층명']
+                column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', 'meta_crs', '표고', '시추공명', '상심도', '하심도', '지층명']
                 for col in column_order:
                     if col not in df.columns:
                         df[col] = ''
@@ -126,6 +126,7 @@ def convert_pdf():
                             "borehole_id": b_id,
                             "longitude": row.get("lon_wgs84", ""),
                             "latitude": row.get("lat_wgs84", ""),
+                            "crs": row.get("meta_crs", ""),
                             "elevation": row.get("표고", ""),
                             "strata": []
                         }
@@ -176,7 +177,7 @@ def convert_pdf():
         
         combined_df = pd.DataFrame(all_combined_rows)
         # 컬럼 순서 재배치 및 고정 (N치 정보 포함하지 않음)
-        column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', '표고', '시추공명', '상심도', '하심도', '지층명']
+        column_order = ['프로젝트명', 'lon_wgs84', 'lat_wgs84', 'meta_crs', '표고', '시추공명', '상심도', '하심도', '지층명']
         for col in column_order:
             if col not in combined_df.columns:
                 combined_df[col] = ''
